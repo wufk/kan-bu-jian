@@ -5,7 +5,7 @@ import pickle
 def load_data(file_path):
     """ Loads the data from a pickled file located at the given file_path. """
     with open(file_path, 'rb') as f:
-        u = pickle.Unpickler(f)
+        u = pickle._Unpickler(f)
         u.encoding = 'latin1'
         data = u.load()
     return data
