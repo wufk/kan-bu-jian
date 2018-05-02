@@ -1,6 +1,8 @@
 import numpy as np
 import pickle
-
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader
 
 def load_data(file_path):
     """ Loads the data from a pickled file located at the given file_path. """
@@ -45,6 +47,43 @@ def generate_data():
     y_test_unseen = y_split[idx]
     return x_train, y_train, x_valid, y_valid, x_test_unseen, y_test_unseen
 
+
+class MyTrainingSet(Dataset):
+
+    def __init__(self, x, y):
+        self.len = x.shape[0]
+        self.x_data = torch.from_numpy(x).float()
+        self.y_data = torch.from_numpy(y).long()
+
+    def __len__(self):
+        return self.len
+
+    def __getitem__(self, idx):
+        return self.x_data[idx], self.y_data[idx]
+
+
+class MyTestingSet(Dataset):
+
+    def __init__(self, x, y):
+        self.len = x.shape[0]
+        self.x_data = torch.from_numpy(x).float()
+        self.y_data = torch.from_numpy(y).long()
+
+    def __len__(self):
+        return self.len
+
+    def __getitem__(self, idx):
+        return self.x_data[idx], self.y_data[idx]
+
+
+class Net(nn.Module):
+    def __init__(self):
+        super(Net, self).__init__()
+        # TODO
+
+    def forward(self, x):
+        # TODO
+        return x
 
 
 def main():
