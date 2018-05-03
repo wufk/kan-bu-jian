@@ -21,12 +21,16 @@ def load_data(file_path):
         data = u.load()
     return data
 
+
+label_list = [1, 5, 6]
+label_seen = [1, 5]
+label_unseen = [6]
+
 def generate_data():
     path = 'cifar-10-batches-py'
     data = load_data(path + '/data_batch_1')
     x = data['data']
     y = data['labels']
-    label_list = [1, 5, 6]
     for i in range(2, 6):
         data = load_data(path + '/data_batch_' + str(i))
         x = np.vstack((x, data['data']))
@@ -42,18 +46,20 @@ def generate_data():
     y_train = y[:12000]
     x_split = x[12000:]
     y_split = y[12000:]
-    label_seen = [1, 5]
     idx = np.in1d(y_train, label_seen)
     x_train = x_train[idx]
     y_train = y_train[idx]
 
     idx = np.in1d(y_split, label_seen)
+
     x_valid = x_split[idx]
     y_valid = y_split[idx]
-
-    idx = np.in1d(y_split, [6])
+    print "============="
+    print len(x_valid)
+    idx = np.in1d(y_split, label_unseen)
     x_test_unseen = x_split[idx]
     y_test_unseen = y_split[idx]
+    print len(x_test_unseen)
     return x_train, y_train, x_valid, y_valid, x_test_unseen, y_test_unseen
 
 class MyTrainingSet(Dataset):
@@ -112,6 +118,8 @@ class VGG(nn.Module):
         out = self.features(x)
         out = out.view(out.size(0), -1)
         out = self.classifier(out)
+        # print "out ------------"
+        # print out
         return out
 
     def _make_layers(self, cfg):
@@ -131,9 +139,13 @@ class VGG(nn.Module):
 
 max_epochs = 5
 def main():
-    net = VGG('VGG11')
+
+    net = VGG('VGG13')
+    net.load_state_dict(torch.load("saved_model"))
     x_train, y_train, x_valid, y_valid, x_test_unseen, y_test_unseen = generate_data()
     print len(x_train)
+
+    '''
     dataset_train = MyTrainingSet(x_train, y_train)
     train_loader = DataLoader(dataset=dataset_train, batch_size=64, shuffle=True)
     criterion = nn.CrossEntropyLoss()
@@ -181,9 +193,12 @@ def main():
             
             loss_np[epoch] = loss.data.numpy()
         accuracy[epoch] = float(correct)
-        # print ("epoch: ", epoch, "loss: ", loss_np[epoch])
-        # print ("epoch: ", epoch, "accuracy: ", accuracy[epoch])
         print accuracy[epoch]
+    torch.save(net.state_dict(), "saved_model")
+    '''
+    
+
+    # test on validation data (seen labels)
     dataset = MyTestingSet(x_valid, y_valid)
     test_loader = DataLoader(dataset=dataset, batch_size = 64, shuffle = True)
     net.eval()
@@ -193,6 +208,7 @@ def main():
         inputs, labels = Variable(inputs), Variable(labels)
         y_pred = net(inputs)
         y_pred_np = y_pred.data.numpy()
+        #print y_pred_np
         label_np = labels.data.numpy().reshape(len(labels),1)
         for j in range(y_pred_np.shape[0]):
             idx_pred = 0
@@ -201,22 +217,35 @@ def main():
                     idx_pred = i
             if idx_pred == label_np[j, 0]:
                 correct += 1
-    print("final testing accuracy: ", float(correct))
+    print("final validation accuracy: ", float(correct))
 
-
-    '''
-    print x_train.shape
-    print "==============="
-    print y_train.shape
-    print "==============="
-    print x_valid.shape
-    print "==============="
-    print y_valid.shape
-    print "==============="
-    print x_test_unseen.shape
-    print "==============="
-    '''
+    # test in unseen data (unseen labels) with threshold
+    dataset = MyTestingSet(x_test_unseen, y_test_unseen)
+    test_loader = DataLoader(dataset=dataset, batch_size = 64, shuffle = True)
+    correct = 0
+    for inputs, labels in test_loader:
+        inputs, labels = Variable(inputs), Variable(labels)
+        y_pred = net(inputs)
+        y_pred_np = y_pred.data.numpy()
+        print y_pred_np
+        label_np = labels.data.numpy().reshape(len(labels),1)
+        for j in range(y_pred_np.shape[0]):
+            idx_pred = 0
+            for i in xrange(len(y_pred_np[j, :])):
+                if y_pred_np[j, i] == max(y_pred_np[j, :]):
+                    idx_pred = i
+            if idx_pred == label_np[j, 0]:
+                correct += 1
     pass
 
-
 main()
+
+
+
+
+
+
+
+
+
+
