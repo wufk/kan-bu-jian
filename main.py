@@ -11,6 +11,7 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from torch.autograd import Variable
 import torchvision
+from scipy.spatial.distance import cosine
 
 
 def load_data(file_path):
@@ -89,16 +90,54 @@ class MyTestingSet(Dataset):
     def __getitem__(self, idx):
         return self.x_data[idx], self.y_data[idx]
 
-'''
-class Net(nn.Module):
-    def __init__(self):
-        super(Net, self).__init__()
-        # TODO
 
-    def forward(self, x):
-        # TODO
-        return x
-'''
+def get_feature_dist(lab_vec1, lab_vec2):
+    res = 0
+    for i in range(len(lab_vec1)):
+        res += ((float(lab_vec1[i]) - lab_vec2[i]) * (float(lab_vec1[i]) - lab_vec2[i]))
+    return res
+
+
+label_cifar10 = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse','ship', 'truck']
+def get_distance_mat():
+    stand_dist = {}
+    glove = open('glove.6B.50d.txt')
+    for ele in glove:
+        temp = ele.split()[0]
+        if temp in label_cifar10:
+            stand_dist[temp] = ele.split()[1:]
+    return stand_dist
+
+def normalize_vec(vec):
+    vec_res = []
+    norm = 0
+    for i in vec:
+        norm += (float(i) * float(i))
+    norm = math.sqrt(norm)
+    for i in vec:
+        vec_res.append(float(i) / norm)
+    return vec_res
+
+def convert_to_feature_space(stand_dist, pred_y):
+    res = []
+    for img_vec in pred_y:
+        temp = []
+        for i in range(len(img_vec)):
+            if i not in label_seen:
+                continue
+            label_prob = img_vec[i]
+            label_prob = float(label_prob)
+            vec = normalize_vec(stand_dist[label_cifar10[i]])
+            #vec = stand_dist[label_cifar10[i]]
+            if len(temp) == 0:
+                for j in range(len(vec)):
+                    temp.append(float(vec[j]) * label_prob)
+            else:
+                for j in range(len(vec)):
+                    temp[j] += (float(vec[j]) * label_prob)
+        res.append(temp)
+    return res
+
 
 cfg = {
     'VGG11': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
@@ -106,7 +145,6 @@ cfg = {
     'VGG16': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'],
     'VGG19': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
 }
-
 
 class VGG(nn.Module):
     def __init__(self, vgg_name):
@@ -196,46 +234,65 @@ def main():
         print accuracy[epoch]
     torch.save(net.state_dict(), "saved_model")
     '''
-    
 
+    '''
     # test on validation data (seen labels)
     dataset = MyTestingSet(x_valid, y_valid)
     test_loader = DataLoader(dataset=dataset, batch_size = 64, shuffle = True)
     net.eval()
     correct = 0
-    criterion = nn.CrossEntropyLoss()
     for inputs, labels in test_loader:
         inputs, labels = Variable(inputs), Variable(labels)
         y_pred = net(inputs)
-        y_pred_np = y_pred.data.numpy()
-        #print y_pred_np
+        #y_pred_np = y_pred.data.numpy()
+        stand_dist = get_distance_mat()
+        y_pred_np = convert_to_feature_space(stand_dist, y_pred)
         label_np = labels.data.numpy().reshape(len(labels),1)
-        for j in range(y_pred_np.shape[0]):
-            idx_pred = 0
-            for i in xrange(len(y_pred_np[j, :])):
-                if y_pred_np[j, i] == max(y_pred_np[j, :]):
-                    idx_pred = i
-            if idx_pred == label_np[j, 0]:
+        for j in range(len(y_pred_np)):
+            temp_max = 100000000000
+            label_temp = -1
+            print '============'
+            for i in label_seen:
+                vec_stand = normalize_vec(stand_dist[label_cifar10[i]])
+                dis = cosine(vec_stand, y_pred_np[j])
+                print dis
+                if temp_max > dis:
+                    temp_max = dis
+                    label_temp = i
+            if label_temp == label_np[j][0]:
                 correct += 1
+            print '============'
     print("final validation accuracy: ", float(correct))
+    '''
 
-    # test in unseen data (unseen labels) with threshold
+    # test on validation data (seen labels)
     dataset = MyTestingSet(x_test_unseen, y_test_unseen)
     test_loader = DataLoader(dataset=dataset, batch_size = 64, shuffle = True)
     correct = 0
     for inputs, labels in test_loader:
         inputs, labels = Variable(inputs), Variable(labels)
         y_pred = net(inputs)
-        y_pred_np = y_pred.data.numpy()
-        print y_pred_np
+        #y_pred_np = y_pred.data.numpy()
+        stand_dist = get_distance_mat()
+        y_pred_np = convert_to_feature_space(stand_dist, y_pred)
         label_np = labels.data.numpy().reshape(len(labels),1)
-        for j in range(y_pred_np.shape[0]):
-            idx_pred = 0
-            for i in xrange(len(y_pred_np[j, :])):
-                if y_pred_np[j, i] == max(y_pred_np[j, :]):
-                    idx_pred = i
-            if idx_pred == label_np[j, 0]:
+        for j in range(len(y_pred_np)):
+            temp_max = 100000000000
+            label_temp = -1
+            print '============'
+            label_unseen_mix = [6, 7]
+            for i in label_unseen_mix:
+                vec_stand = normalize_vec(stand_dist[label_cifar10[i]])
+                dis = cosine(vec_stand, y_pred_np[j])
+                print dis
+                if temp_max > dis:
+                    temp_max = dis
+                    label_temp = i
+            if label_temp == label_np[j][0]:
                 correct += 1
+            print label_np[j][0]
+            print '============'
+    print("final validation accuracy: ", float(correct))
     pass
 
 main()
